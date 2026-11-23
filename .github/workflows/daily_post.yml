@@ -1,0 +1,74 @@
+name: SiteGlow NG Autonomous Instagram Agent
+
+on:
+  schedule:
+    # Runs automatically every day at 17:00 UTC (6:00 PM WAT — peak Nigerian IG engagement)
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Content format (auto alternates Reel & Carousel)"
+        required: true
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - reel
+          - carousel
+      dry_run:
+        description: "Generate media without publishing to Instagram"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  generate-and-post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install FFmpeg & fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core fonts-liberation
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run SiteGlow NG AI Content & Publishing Agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
+          CONTENT_MODE: ${{ github.event.inputs.mode || 'auto' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          TTS_VOICE: "en-NG-AbeoNeural"
+        run: python -m src.run_agent
+
+      - name: Upload generated post preview as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: siteglow-ig-post-${{ github.run_number }}
+          path: output/
+          retention-days: 14
+
+      - name: Commit updated topic history
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config user.name "SiteGlow IG Agent"
+          git config user.email "bot@siteglowng.local"
+          git add history.json
+          git diff --staged --quiet || git commit -m "chore: log posted topic [skip ci]"
+          git push

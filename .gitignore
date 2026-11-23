@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+output/
+*.mp4
+*.mp3
+*.wav
+*.ass
+.DS_Store
+Thumbs.db
